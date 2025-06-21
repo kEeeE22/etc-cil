@@ -29,3 +29,5 @@ def setup_parser():
 
 if __name__ == '__main__':
     main()
+
+#python main.py --config=./exps/[MODEL NAME].json

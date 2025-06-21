@@ -3,6 +3,8 @@ from torchvision import datasets, transforms
 from utils.toolkit import split_images_labels
 from . import autoaugment
 from . import ops
+import pandas as pd
+import pickle
 
 class iData(object):
     train_trsf = []
@@ -38,7 +40,18 @@ class iCIFAR10(iData):
             test_dataset.targets
         )
 
-
+class iETC256(iData):
+    use_path = True
+    train_trsf = [
+        transforms.ToTensor(),
+    ]
+    test_trsf = [transforms.ToTensor()]
+    class_order = np.arange(12).tolist()
+    
+    def download_data(self):
+        with open('./etc_data/cil_etc_256.pkl', 'rb') as f:
+            self.train_data, self.test_data, self.train_targets,  self.test_targets = pickle.load(f)
+            
 class iCIFAR100(iData):
     use_path = False
     train_trsf = [
