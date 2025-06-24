@@ -1,8 +1,8 @@
 {
     "prefix": "reproduce",
     "dataset": "etc_256",
-    "memory_size": 2000,
-    "memory_per_class": 20,
+    "memory_size": 200,
+    "memory_per_class": 15,
     "fixed_memory": false,
     "shuffle": true,
     "init_cls": 3,
