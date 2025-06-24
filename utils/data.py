@@ -41,7 +41,7 @@ class iCIFAR10(iData):
         )
 
 class iETC256(iData):
-    use_path = True
+    use_path = False
     train_trsf = [
         transforms.ToTensor(),
     ]

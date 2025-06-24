@@ -26,7 +26,7 @@ class ETC_CNN(nn.Module):
         self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop3 = nn.Dropout(0.25)
 
-        self.fc1 = nn.Linear(in_features=16*2*8, out_features=out_dim)
+        self.fc1 = nn.Linear(in_features=1024, out_features=out_dim)
         self.drop4 = nn.Dropout(0.1)
 
         self.out_dim = out_dim

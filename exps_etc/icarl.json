@@ -5,7 +5,7 @@
     "memory_per_class": 20,
     "fixed_memory": false,
     "shuffle": true,
-    "init_cls": 0,
+    "init_cls": 3,
     "increment": 3,
     "model_name": "icarl",
     "convnet_type": "etc_cnn",
