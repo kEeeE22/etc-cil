@@ -26,8 +26,7 @@ lrate_decay = 0.1
 batch_size = 128
 weight_decay = 2e-4
 num_workers = 8
-T = 2
-lamda = 3
+mu = 0.9 # 1e-3, 0.5 
 
 class Prox(BaseLearner):
     def __init__(self, args):
@@ -158,9 +157,9 @@ class Prox(BaseLearner):
                     logits[:, self._known_classes :], fake_targets
                 )
                 loss_prox = fedprox_loss(
-                    self._network, self._old_network, mu=0.9)
+                    self._network, self._old_network, mu=mu)
 
-                loss = lamda * loss_prox + loss_clf
+                loss = loss_prox + loss_clf
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -198,7 +197,9 @@ class Prox(BaseLearner):
 
 def fedprox_loss(current_model, ref_model, mu):
     loss = 0.0
-    for (name, param), (_, ref_param) in zip(current_model.named_parameters(), ref_model.named_parameters()):
+    for (name, param), (ref_name, ref_param) in zip(current_model.named_parameters(), ref_model.named_parameters()):
         if param.requires_grad:
+            if param.shape != ref_param.shape:
+                continue
             loss += ((param - ref_param.detach()) ** 2).sum()
     return 0.5 * mu * loss
