@@ -29,7 +29,7 @@ num_workers = 8
 T = 2
 lamda = 3
 
-class LwF(BaseLearner):
+class Prox(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)

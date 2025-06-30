@@ -75,5 +75,8 @@ def get_model(model_name, args):
     elif name == "tagfex":
         from models.tagfex import TagFex
         return TagFex(args)
+    elif name == 'prox':
+        from models.prox import Prox
+        return Prox(args)
     else:
         assert 0
