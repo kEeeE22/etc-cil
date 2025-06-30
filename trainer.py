@@ -32,7 +32,7 @@ def _train(args):
         args["dataset"],
         init_cls,
         args["increment"],
-        args["prefix"],
+        args["model_name"],
         args["seed"],
         args["convnet_type"],
     )
