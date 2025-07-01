@@ -13,17 +13,17 @@ from utils.toolkit import target2onehot, tensor2numpy
 
 EPSILON = 1e-8
 
-init_epoch = 200
-init_lr = 0.1
+init_epoch = 150
+init_lr = 0.001
 init_milestones = [60, 120, 170]
-init_lr_decay = 0.1
+init_lr_decay = 0.01
 init_weight_decay = 0.0005
 
 
-epochs = 170
-lrate = 0.1
+epochs = 150
+lrate = 0.001
 milestones = [80, 120]
-lrate_decay = 0.1
+lrate_decay = 0.01
 batch_size = 128
 weight_decay = 2e-4
 num_workers = 8
@@ -148,6 +148,7 @@ class Prox_w_herding(BaseLearner):
         logging.info(info)
 
     def _update_representation(self, train_loader, test_loader, optimizer, scheduler):
+        focal = FocalLoss(alpha=1.0, gamma=2.0)
         prog_bar = tqdm(range(epochs))
         for _, epoch in enumerate(prog_bar):
             self._network.train()
@@ -157,7 +158,8 @@ class Prox_w_herding(BaseLearner):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
-                loss_clf = F.cross_entropy(logits, targets)
+                # loss_clf = F.cross_entropy(logits, targets)
+                loss_clf = focal(logits, targets)
                 loss_prox = fedprox_loss(
                     self._network, self._old_network, mu=mu)
 
@@ -204,3 +206,32 @@ def fedprox_loss(current_model, ref_model, mu):
                 continue
             loss += ((param - ref_param.detach()) ** 2).sum()
     return 0.5 * mu * loss
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1.0, gamma=2.0, reduction='mean'):
+        """
+        alpha: trọng số cho class (scalar hoặc tensor)
+        gamma: hệ số điều chỉnh độ khó
+        reduction: 'mean' | 'sum' | 'none'
+        """
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        """
+        inputs: (batch_size, num_classes) - logits đầu ra của model
+        targets: (batch_size) - nhãn đúng (int từ 0 đến num_classes-1)
+        """
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none')  # tính CE loss từng mẫu
+        pt = torch.exp(-ce_loss)  # pt = softmax output của class đúng
+
+        focal_loss = self.alpha * ((1 - pt) ** self.gamma) * ce_loss
+
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
