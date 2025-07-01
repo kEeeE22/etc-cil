@@ -78,5 +78,8 @@ def get_model(model_name, args):
     elif name == 'prox':
         from models.prox import Prox
         return Prox(args)
+    elif name == 'prox_w_herding':
+        from models.prox_w_herding import Prox_w_herding
+        return Prox_w_herding(args)
     else:
         assert 0
