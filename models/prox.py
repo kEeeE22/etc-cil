@@ -36,6 +36,7 @@ class Prox(BaseLearner):
     def after_task(self):
         self._old_network = self._network.copy().freeze()
         self._known_classes = self._total_classes
+        logging.info("Exemplar size: {}".format(self.exemplar_size))
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -51,6 +52,7 @@ class Prox(BaseLearner):
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
+            appendent=self._get_memory(),
         )
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
@@ -65,6 +67,7 @@ class Prox(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
+        self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
@@ -90,7 +93,7 @@ class Prox(BaseLearner):
                 lr=lrate,
                 momentum=0.9,
                 weight_decay=weight_decay,
-            )
+            )  # 1e-5
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer=optimizer, milestones=milestones, gamma=lrate_decay
             )
@@ -137,12 +140,12 @@ class Prox(BaseLearner):
                     losses / len(train_loader),
                     train_acc,
                 )
+
             prog_bar.set_description(info)
 
         logging.info(info)
 
     def _update_representation(self, train_loader, test_loader, optimizer, scheduler):
-
         prog_bar = tqdm(range(epochs))
         for _, epoch in enumerate(prog_bar):
             self._network.train()
@@ -152,24 +155,20 @@ class Prox(BaseLearner):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
-                fake_targets = targets - self._known_classes
-                loss_clf = F.cross_entropy(
-                    logits[:, self._known_classes :], fake_targets
-                )
+                loss_clf = F.cross_entropy(logits, targets)
                 loss_prox = fedprox_loss(
                     self._network, self._old_network, mu=mu)
 
-                loss = loss_prox + loss_clf
+                loss = loss_clf + loss_prox
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 losses += loss.item()
 
-                with torch.no_grad():
-                    _, preds = torch.max(logits, dim=1)
-                    correct += preds.eq(targets.expand_as(preds)).cpu().sum()
-                    total += len(targets)
+                _, preds = torch.max(logits, dim=1)
+                correct += preds.eq(targets.expand_as(preds)).cpu().sum()
+                total += len(targets)
 
             scheduler.step()
             train_acc = np.around(tensor2numpy(correct) * 100 / total, decimals=2)
