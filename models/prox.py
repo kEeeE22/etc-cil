@@ -10,23 +10,25 @@ from torch.utils.data import DataLoader
 from utils.inc_net import IncrementalNet
 from models.base import BaseLearner
 from utils.toolkit import target2onehot, tensor2numpy
+from utils.dd import train_synthetic
 
+EPSILON = 1e-8
 
 init_epoch = 200
 init_lr = 0.1
-init_milestones = [60, 120, 160]
+init_milestones = [60, 120, 170]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
 
 
-epochs = 250
+epochs = 170
 lrate = 0.1
-milestones = [60, 120, 180, 220]
+milestones = [80, 120]
 lrate_decay = 0.1
 batch_size = 128
 weight_decay = 2e-4
 num_workers = 8
-mu = 0.9 # 1e-3, 0.5 
+T = 2
 
 class Prox(BaseLearner):
     def __init__(self, args):
@@ -68,6 +70,8 @@ class Prox(BaseLearner):
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
+        synth = train_synthetic(self._network, self.train_loader, self._device, epochs=100)
+        self._synthetic_memory = {'x': synth['x'], 'y': synth['y']}
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
@@ -93,7 +97,7 @@ class Prox(BaseLearner):
                 lr=lrate,
                 momentum=0.9,
                 weight_decay=weight_decay,
-            )  # 1e-5
+            )
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer=optimizer, milestones=milestones, gamma=lrate_decay
             )
@@ -153,13 +157,28 @@ class Prox(BaseLearner):
             correct, total = 0, 0
             for i, (_, inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
+                synth_idx = np.random.randint(len(self._synthetic_memory['x']))
+                x_synth = torch.tensor(self._synthetic_memory['x'][synth_idx], dtype=torch.float).unsqueeze(0).to(self._device)
+                y_synth = torch.tensor(self._synthetic_memory['y'][synth_idx], dtype=torch.long).to(self._device)
+    
+                lam = np.random.beta(1.0, 1.0)
+                bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
+                inputs[:, :, bbx1:bbx2, bby1:bby2] = x_synth[:, :, bbx1:bbx2, bby1:bby2]
+
+                # Nhãn mềm
+                y_synth_onehot = F.one_hot(y_synth.repeat(inputs.shape[0]), num_classes=self._total_classes).float()
+                y_target_onehot = F.one_hot(targets, num_classes=self._total_classes).float()
+                y_mixed = lam * y_target_onehot + (1 - lam) * y_synth_onehot
+
                 logits = self._network(inputs)["logits"]
+                loss_clf = F.kl_div(F.log_softmax(logits, dim=1), y_mixed, reduction='batchmean')
+                loss_kd = _KD_loss(
+                    logits[:, : self._known_classes],
+                    self._old_network(inputs)["logits"],
+                    T,
+                )
 
-                loss_clf = F.cross_entropy(logits, targets)
-                loss_prox = fedprox_loss(
-                    self._network, self._old_network, mu=mu)
-
-                loss = loss_clf + loss_prox
+                loss = loss_clf + loss_kd
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -194,11 +213,25 @@ class Prox(BaseLearner):
         logging.info(info)
 
 
-def fedprox_loss(current_model, ref_model, mu):
-    loss = 0.0
-    for (name, param), (ref_name, ref_param) in zip(current_model.named_parameters(), ref_model.named_parameters()):
-        if param.requires_grad:
-            if param.shape != ref_param.shape:
-                continue
-            loss += ((param - ref_param.detach()) ** 2).sum()
-    return 0.5 * mu * loss
+def _KD_loss(pred, soft, T):
+    pred = torch.log_softmax(pred / T, dim=1)
+    soft = torch.softmax(soft / T, dim=1)
+    return -1 * torch.mul(soft, pred).sum() / pred.shape[0]
+
+def rand_bbox(size, lam):
+    W = size[2]
+    H = size[3]
+    cut_rat = np.sqrt(1. - lam)
+    cut_w = np.int(W * cut_rat)
+    cut_h = np.int(H * cut_rat)
+
+    # uniform
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+
+    bbx1 = np.clip(cx - cut_w // 2, 0, W)
+    bby1 = np.clip(cy - cut_h // 2, 0, H)
+    bbx2 = np.clip(cx + cut_w // 2, 0, W)
+    bby2 = np.clip(cy + cut_h // 2, 0, H)
+
+    return bbx1, bby1, bbx2, bby2
