@@ -70,7 +70,7 @@ class Prox(BaseLearner):
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
-        synth = train_synthetic(self._network, self.train_loader, self._device, epochs=100)
+        synth = train_synthetic(model=self._network, dataloader=self.train_loader,ipc=1, epochs=100)
         self._synthetic_memory = {'x': synth['x'], 'y': synth['y']}
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
@@ -222,8 +222,8 @@ def rand_bbox(size, lam):
     W = size[2]
     H = size[3]
     cut_rat = np.sqrt(1. - lam)
-    cut_w = np.int(W * cut_rat)
-    cut_h = np.int(H * cut_rat)
+    cut_w = int(W * cut_rat)
+    cut_h = int(H * cut_rat)
 
     # uniform
     cx = np.random.randint(W)

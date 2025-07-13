@@ -51,8 +51,8 @@ def train_synthetic(model, dataloader, ipc, epochs, network_steps=100):
     sample, train_label = [], []
     print("Training synthetic data...")
 
-    for batch in dataloader:
-      batch_data, batch_labels = batch["img"], batch["label"]
+    for (_, batch_data, batch_labels) in dataloader:
+      #batch_data, batch_labels = batch["img"], batch["label"]
       sample.append(batch_data)
       train_label.append(batch_labels)
 
@@ -86,11 +86,12 @@ def train_synthetic(model, dataloader, ipc, epochs, network_steps=100):
         idx_shuffle = np.random.permutation(indices_class[c])[:n - 1]
       return images_all[idx_shuffle]
 
-    data_syn = torch.rand(size=(n_labels * ipc, CHANNEL, IM_SIZE[0], IM_SIZE[1]),
-                          dtype=torch.float, requires_grad=True, device=DEVICE)
-    target_syn = torch.tensor([np.ones(ipc) * i for i in numlabels],
-                              dtype=torch.long, requires_grad=False, device=DEVICE).view(-1)
-
+    data_syn = []
+    for c in numlabels:
+        img = get_images(c, 1)[0]
+        data_syn.append(img.unsqueeze(0))
+    data_syn = torch.cat(data_syn, dim=0).clone().detach().to(DEVICE).requires_grad_(True)
+    target_syn = torch.repeat_interleave(torch.tensor(numlabels, device=DEVICE), repeats=ipc)
     img_optim = torch.optim.SGD([data_syn], lr=IMG_LR)
     loss_fn = nn.CrossEntropyLoss().to(DEVICE)
 
@@ -109,14 +110,14 @@ def train_synthetic(model, dataloader, ipc, epochs, network_steps=100):
             for c in numlabels:
                 img_real = get_images(c, 256).to(DEVICE)
                 target_real = torch.ones(img_real.shape[0], device=DEVICE, dtype=torch.long) * c
-                pred_real = net(img_real)
+                pred_real = net(img_real)['logits']
 
                 loss_real = loss_fn(pred_real, target_real)
                 gw_real = torch.autograd.grad(loss_real, net.parameters(), retain_graph=True)
 
                 data_synth = data_syn[c * ipc: (c + 1) * ipc].reshape((ipc, CHANNEL, IM_SIZE[0], IM_SIZE[1]))
                 target_synth = torch.ones(ipc, device=DEVICE, dtype=torch.long) * c
-                pred_syn = net(data_synth)
+                pred_syn = net(data_synth)['logits']
 
                 loss_syn = loss_fn(pred_syn, target_synth)
                 gw_syn = torch.autograd.grad(loss_syn, net.parameters(), create_graph=True)
