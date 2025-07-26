@@ -64,7 +64,7 @@ class DistillReplay(BaseLearner):
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
-        new_classes = data_manager.get_new_classes(self._cur_task)
+        new_classes = data_manager.get_task_size(self._cur_task)
         self._total_classes = self._known_classes + new_classes
         self._network.update_fc(self._total_classes)
         logging.info(
