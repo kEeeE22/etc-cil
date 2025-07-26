@@ -1,0 +1,12 @@
+{
+    "prefix": "distill_replay",
+    "dataset": "etc_256",
+    "fixed_memory": false,
+    "shuffle": true,
+    "init_cls": 3,
+    "increment": 3,
+    "model_name": "distill_replay",
+    "convnet_type": "etc_cnn",
+    "device": ["0"],
+    "seed": [1993]
+}

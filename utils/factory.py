@@ -81,5 +81,8 @@ def get_model(model_name, args):
     elif name == 'prox_w_herding':
         from models.prox_w_herding import Prox_w_herding
         return Prox_w_herding(args)
+    elif name == 'distill_replay':
+        from models.distill_replay import DistillReplay
+        return DistillReplay(args)
     else:
         assert 0
