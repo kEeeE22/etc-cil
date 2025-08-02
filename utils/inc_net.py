@@ -157,13 +157,15 @@ class IncrementalNet(BaseNet):
         return fc
 
     def forward(self, x):
-        x = self.convnet(x)
-        out = self.fc(x["features"])
-        out.update(x)
+        x = self.convnet(x)  # phải trả về dict với key "features"
+        logits = self.fc(x["features"])  # SimpleLinear
+        out = {
+            "logits": logits,
+            "features": x["features"]
+        }
         if hasattr(self, "gradcam") and self.gradcam:
             out["gradcam_gradients"] = self._gradcam_gradients
             out["gradcam_activations"] = self._gradcam_activations
-
         return out
 
     def unset_gradcam_hook(self):

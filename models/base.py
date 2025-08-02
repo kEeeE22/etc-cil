@@ -382,34 +382,3 @@ class BaseLearner(object):
             _class_means[class_idx, :] = mean
 
         self._class_means = _class_means
-
-    
-    # def _construct_exemplar_random(self, data_manager, m):
-    #     logging.info("Constructing exemplars (RANDOM)...({} per class)".format(m))
-        
-    #     for class_idx in range(self._known_classes, self._total_classes):
-    #         data, targets, idx_dataset = data_manager.get_dataset(
-    #             np.arange(class_idx, class_idx + 1),
-    #             source="train",
-    #             mode="test",
-    #             ret_data=True,
-    #         )
-            
-    #         # Random shuffle indices
-    #         indices = np.arange(len(data))
-    #         np.random.shuffle(indices)
-    #         selected_indices = indices[:m]
-
-    #         selected_exemplars = data[selected_indices]
-    #         exemplar_targets = np.full(m, class_idx)
-
-    #         self._data_memory = (
-    #             np.concatenate((self._data_memory, selected_exemplars))
-    #             if len(self._data_memory) != 0
-    #             else selected_exemplars
-    #         )
-    #         self._targets_memory = (
-    #             np.concatenate((self._targets_memory, exemplar_targets))
-    #             if len(self._targets_memory) != 0
-    #             else exemplar_targets
-    #         )

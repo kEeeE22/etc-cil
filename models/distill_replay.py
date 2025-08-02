@@ -137,7 +137,7 @@ class DistillReplay(BaseLearner):
             self._network.train()
             losses = 0.0
             correct, total = 0, 0
-            for i, (_, inputs, targets) in enumerate(train_loader):
+            for i, (inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
@@ -183,7 +183,7 @@ class DistillReplay(BaseLearner):
             self._network.train()
             losses = 0.0
             correct, total = 0, 0
-            for i, (_, inputs, targets) in enumerate(train_loader):
+            for i, (inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
