@@ -84,5 +84,8 @@ def get_model(model_name, args):
     elif name == 'distill_replay':
         from models.distill_replay import DistillReplay
         return DistillReplay(args)
+    elif name == 'ssd':
+        from models.ssd import SSD
+        return SSD(args)
     else:
         assert 0

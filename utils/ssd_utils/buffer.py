@@ -1,5 +1,5 @@
 import torch
-from ssd_utils.ssd_utils import maybe_cuda, random_retrieve, SummarizeUpdate
+from utils.ssd_utils.ssd_utils import maybe_cuda, random_retrieve, SummarizeUpdate
 import copy
 from collections import defaultdict
 import numpy as np
