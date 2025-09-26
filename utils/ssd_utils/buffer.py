@@ -9,11 +9,9 @@ class DynamicBuffer(torch.nn.Module):
         super().__init__()
         self.params = params
         self.model = model
-        self.cuda = self.params.cuda
         self.current_index = 0
         self.n_seen_so_far = 0
-        self.device = "cuda" if self.params.cuda else "cpu"
-        self.num_classes_per_task = self.params.num_classes_per_task
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.images_per_class = self.params.images_per_class
         self.num_classes = 0
 

@@ -12,5 +12,6 @@
     "device": ["0"],
     "seed": [1993],
     "mem_iters": 1,
-    "queue_size": 64
+    "queue_size": 64,
+    "images_per_class": 1
 }

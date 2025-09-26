@@ -6,56 +6,56 @@ from torch import nn
 from torch import optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from torchvision.transforms import RandomResizedCrop, RandomHorizontalFlip, RandomGrayscale
 from models.base import BaseLearner
 from utils.inc_net import IncrementalNet
-from utils.inc_net import CosineIncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
-from utils.ssd_utils.buffer import DynamicBuffer
-from utils.ssd_utils.supcon_loss import SupConLoss
-from utils.ssd_utils.ssd_utils import random_retrieve
-batch_size = 1
+from utils.concept1_utils.utils import infer, load_synthetic
+
+
+#distill hyperparameters
+distill_lr = 0.01
+first_bn_multiplier = 1.0
+r_bn = 1.0
+jitter = 0
+ipc_start = 0
+M = 2
+distill_batch_size = 64
+distill_epochs = 200
+ipc=10
+#incremental learning hyperparameters
+batch_size = 128
 num_workers = 4
-
-init_lr_decay = 0.1
-init_epoch = 200
+init_epoch = 100
 init_lr = 0.1
-init_weight_decay = 1e-4
-init_milestones = [60, 120, 160]
+init_milestones = [60, 80]
 init_lr_decay = 0.1
-
-epochs = 200
-lrate_decay = 0.1
-weight_decay = 1e-4
-milestones = [60, 120, 160]
+init_weight_decay = 0.0005
+epochs = 100
 lrate = 0.1
+milestones = [60, 80]
+lrate_decay = 0.1
+weight_decay = 2e-4
+num_class = 12
 
-
-class SSD(BaseLearner):
+class concept1(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
-        self.buffer = []
-        self.aff_x = []
-        self.aff_y = []
-        self.transform = nn.Sequential(
-            RandomResizedCrop(size=(20, 256), scale=(0.2, 1.0)),
-            RandomHorizontalFlip(),
-            RandomGrayscale(p=0.2)
-
-        )
+        self.synthetic_data = []
+        
     def after_task(self):
         self._old_network = self._network.copy().freeze()
         self._known_classes = self._total_classes
         logging.info("Exemplar size: {}".format(self.exemplar_size))
-        
+
     def incremental_train(self, data_manager):
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
+        self._old_network.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
@@ -64,6 +64,7 @@ class SSD(BaseLearner):
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
+            appendent=self._get_memory(),
         )
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
@@ -78,7 +79,9 @@ class SSD(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
-        samples = random_retrieve()
+        self.gernerate_synthetic_data(data_manager)
+        self.gernerate_synthetic_data(ipc, train_dataset)
+        self._construct_exemplar_random(data_manager, 10)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
@@ -164,38 +167,21 @@ class SSD(BaseLearner):
             correct, total = 0, 0
             for i, (_, inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
+                logits = self._network(inputs)["logits"]
 
-                if self.buffer is not None:
-                    for j in range(self.args.mem_iters):
-                        mem_x, mem_y = self.buffer.retrieve(x=inputs, y=targets)
-                        mem_x, mem_y = mem_x.to(self._device), mem_y.to(self._device)
-                        combines_batch = torch.cat((inputs, mem_x), dim=0)
-                        combines_targets = torch.cat((targets, mem_y), dim=0)
-                        combines_batch_aug = self.transform(combines_batch)
+                loss_clf = F.cross_entropy(logits, targets)
 
-                        features_ori = self.model.forward(combines_batch)["features"].unsqueeze(1)
-                        features_aug = self.model.forward(combines_batch_aug)["features"].unsqueeze(1)
-                        features = torch.cat([features_ori, features_aug], dim=1)
+                loss = loss_clf
 
-                        loss_clf = SupConLoss(features, combines_targets)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                losses += loss.item()
 
-                        loss = loss_clf
+                _, preds = torch.max(logits, dim=1)
+                correct += preds.eq(targets.expand_as(preds)).cpu().sum()
+                total += len(targets)
 
-                        optimizer.zero_grad()
-                        loss.backward()
-                        optimizer.step()
-                        losses += loss.item()
-
-                        logits = self._network(combines_batch)["logits"]
-                        _, preds = torch.max(logits, dim=1)
-                        correct += preds.eq(targets.expand_as(preds)).cpu().sum()
-                        total += len(targets)
-                self.aff_x.append(inputs)
-                self.aff_y.append(targets)
-                if len(self.aff_x) > self.args.queue_size:
-                    self.aff_x.pop(0)
-                    self.aff_y.pop(0)
-                self.buffer.update(inputs, targets, aff_x=self.aff_x, aff_y=self.aff_y, update_index=i)
             scheduler.step()
             train_acc = np.around(tensor2numpy(correct) * 100 / total, decimals=2)
             if epoch % 5 == 0:
@@ -218,3 +204,54 @@ class SSD(BaseLearner):
                 )
             prog_bar.set_description(info)
         logging.info(info)
+
+    def _construct_exemplar_random(self, data_manager, m):
+        logging.info("Constructing exemplars randomly for new classes...({} per classes)".format(m))
+        
+        for class_idx in range(self._known_classes, self._total_classes):
+            # Lấy dữ liệu của class hiện tại
+            data, targets, class_dset = data_manager.get_dataset(
+                np.arange(class_idx, class_idx + 1),
+                source="train",
+                mode="test",
+                ret_data=True,
+            )
+            
+            total_samples = len(data)
+            if total_samples <= m:
+                selected_indices = np.arange(total_samples)
+            else:
+                selected_indices = np.random.choice(total_samples, m, replace=False)
+            
+            selected_exemplars = data[selected_indices]
+            exemplar_targets = np.full(len(selected_exemplars), class_idx)
+            
+            self._data_memory = (
+                np.concatenate((self._data_memory, selected_exemplars))
+                if len(self._data_memory) != 0
+                else selected_exemplars
+            )
+            self._targets_memory = (
+                np.concatenate((self._targets_memory, exemplar_targets))
+                if len(self._targets_memory) != 0
+                else exemplar_targets
+            )
+    
+    def gernerate_synthetic_data(self, ipc, train_dataset):   
+        print('Generating synthetic data...')
+
+        ipc_init = int(ipc / M / self._total_classes)
+        ipc_end = ipc_init * (M + 1)
+
+        for ipc_id in range(ipc_start, ipc_end):
+            infer(
+                model_lists = [self._network, self._old_network], 
+                ipc_id = ipc_id, 
+                num_class = self._total_classes, 
+                dataset = train_dataset, 
+                iteration = distill_epochs, 
+                lr = distill_lr, 
+                batch_size=distill_batch_size, 
+                init_path='./syn', 
+                ipc_init=ipc_init, 
+                store_best_images = True)
