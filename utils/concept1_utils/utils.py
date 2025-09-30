@@ -18,7 +18,9 @@ def clip_image(image_tensor, dataset: str) -> torch.Tensor:
     elif dataset == 'tinyIN':
         mean = np.array([0.4802, 0.4481, 0.3975])
         std = np.array([0.2302, 0.2265, 0.2262])
-
+    elif dataset == 'etc_256':
+        mean = np.array([0.5, 0.5])
+        std = np.array([0.5, 0.5])
     for c in range(3):
         m, s = mean[c], std[c]
         image_tensor[:, c] = torch.clamp(image_tensor[:, c], -m / s, (1 - m) / s)
@@ -38,7 +40,9 @@ def denormalize_image(image_tensor, dataset: str) -> torch.Tensor:
     elif dataset == 'tinyIN':
         mean = np.array([0.4802, 0.4481, 0.3975])
         std = np.array([0.2302, 0.2265, 0.2262])
-
+    elif dataset == 'etc_256':
+        mean = np.array([0.5, 0.5])
+        std = np.array([0.5, 0.5])
     for c in range(3):
         m, s = mean[c], std[c]
         image_tensor[:, c] = torch.clamp(image_tensor[:, c] * s + m, 0, 1)
@@ -122,14 +126,3 @@ def save_images_ufc(args, images, targets, ipc_id, model_index):
         image_np = images[id].data.cpu().numpy().transpose((1, 2, 0))
         pil_image = Image.fromarray((image_np * 255).astype(np.uint8))
         pil_image.save(place_to_store)
-
-def load_synthetic(syn_data_path, class_ids):
-    synthetic_dataset = []
-    for cls in class_ids:
-        dir_path = os.path.join(syn_data_path, f"new{cls:03d}")
-        if os.path.exists(dir_path):
-            for fname in os.listdir(dir_path):
-                if fname.endswith(".jpg"):
-                    img_path = os.path.join(dir_path, fname)
-                    synthetic_dataset.append((img_path, cls))
-    return synthetic_dataset
