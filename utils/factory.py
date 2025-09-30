@@ -75,17 +75,14 @@ def get_model(model_name, args):
     elif name == "tagfex":
         from models.tagfex import TagFex
         return TagFex(args)
-    elif name == 'prox':
-        from models.prox import Prox
-        return Prox(args)
-    elif name == 'prox_w_herding':
-        from models.prox_w_herding import Prox_w_herding
-        return Prox_w_herding(args)
     elif name == 'distill_replay':
         from models.distill_replay import DistillReplay
         return DistillReplay(args)
     elif name == 'ssd':
         from models.ssd import SSD
         return SSD(args)
+    elif name == 'concept1':
+        from models.concept1 import Concept1
+        return Concept1(args)
     else:
         assert 0
