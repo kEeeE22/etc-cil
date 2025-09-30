@@ -82,7 +82,7 @@ def get_model(model_name, args):
         from models.ssd import SSD
         return SSD(args)
     elif name == 'concept1':
-        from models.concept1 import Concept1
-        return Concept1(args)
+        from models.concept1 import concept1
+        return concept1(args)
     else:
         assert 0

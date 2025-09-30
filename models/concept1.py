@@ -10,7 +10,7 @@ from models.base import BaseLearner
 from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
-from utils.concept1_utils.utils import infer, load_synthetic
+from utils.concept1_utils import infer
 
 
 #distill hyperparameters
@@ -55,7 +55,8 @@ class concept1(BaseLearner):
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
-        self._old_network.update_fc(self._total_classes)
+        if self._old_network is not None:
+            self._old_network.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
