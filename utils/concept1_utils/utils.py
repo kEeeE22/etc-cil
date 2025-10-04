@@ -87,18 +87,18 @@ def lr_cosine_policy(base_lr, warmup_length, epochs):
     return lr_policy(_lr_fn)
 
 
-def save_images(args, images, targets, ipc_id):
+def save_images(syn_data_path, images, targets, ipc_id):
     for id in range(images.shape[0]):
         if targets.ndimension() == 1:
             class_id = targets[id].item()
         else:
             class_id = targets[id].argmax().item()
 
-        if not os.path.exists(args.syn_data_path):
-            os.mkdir(args.syn_data_path)
+        if not os.path.exists(syn_data_path):
+            os.mkdir(syn_data_path)
 
         # save into separate folders
-        dir_path = '{}/new{:03d}'.format(args.syn_data_path, class_id)
+        dir_path = '{}/new{:03d}'.format(syn_data_path, class_id)
         place_to_store = dir_path + '/class{:03d}_id{:03d}.jpg'.format(class_id, ipc_id)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
@@ -107,18 +107,18 @@ def save_images(args, images, targets, ipc_id):
         pil_image = Image.fromarray((image_np * 255).astype(np.uint8))
         pil_image.save(place_to_store)
 
-def save_images_ufc(args, images, targets, ipc_id, model_index):
+def save_images_ufc(syn_data_path, images, targets, ipc_id, model_index):
     for id in range(90):#(images.shape[0]):
         if targets.ndimension() == 1:
             class_id = targets[id].item()
         else:
             class_id = targets[id].argmax().item()
 
-        if not os.path.exists(args.syn_data_path):
-            os.mkdir(args.syn_data_path)
+        if not os.path.exists(syn_data_path):
+            os.mkdir(syn_data_path)
 
         # save into separate folders
-        dir_path = '{}/new{:03d}'.format(args.syn_data_path, class_id)
+        dir_path = '{}/new{:03d}'.format(syn_data_path, class_id)
         place_to_store = dir_path + '/class{:03d}_model{:03d}_id{:03d}.jpg'.format(class_id,model_index, id)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

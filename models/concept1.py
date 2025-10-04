@@ -21,17 +21,17 @@ jitter = 0
 ipc_start = 0
 M = 2
 distill_batch_size = 64
-distill_epochs = 200
+distill_epochs = 5
 ipc=10
 #incremental learning hyperparameters
 batch_size = 128
 num_workers = 4
-init_epoch = 100
+init_epoch = 5
 init_lr = 0.1
 init_milestones = [60, 80]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
-epochs = 100
+epochs = 5
 lrate = 0.1
 milestones = [60, 80]
 lrate_decay = 0.1
@@ -43,7 +43,7 @@ class concept1(BaseLearner):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
         self.synthetic_data = []
-        
+        self.ufc = []
     def after_task(self):
         self._old_network = self._network.copy().freeze()
         self._known_classes = self._total_classes
@@ -80,8 +80,7 @@ class concept1(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
-        self.gernerate_synthetic_data(data_manager)
-        self.gernerate_synthetic_data(ipc, train_dataset)
+        self.generate_synthetic_data(ipc, train_dataset)
         self._construct_exemplar_random(data_manager, 10)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
@@ -238,14 +237,14 @@ class concept1(BaseLearner):
                 else exemplar_targets
             )
     
-    def gernerate_synthetic_data(self, ipc, train_dataset):   
+    def generate_synthetic_data(self, ipc, train_dataset):   
         print('Generating synthetic data...')
 
         ipc_init = int(ipc / M / self._total_classes)
         ipc_end = ipc_init * (M + 1)
 
         for ipc_id in range(ipc_start, ipc_end):
-            infer(
+            syn, aufc = infer(
                 model_lists = [self._network, self._old_network], 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 
@@ -256,3 +255,6 @@ class concept1(BaseLearner):
                 init_path='./syn', 
                 ipc_init=ipc_init, 
                 store_best_images = True)
+            
+            self.synthetic_data.extend(syn)
+            self.ufc.extend(aufc)
