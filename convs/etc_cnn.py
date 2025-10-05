@@ -56,9 +56,6 @@ class ETC_CNN(nn.Module):
             "fmaps": [],  
         }
     
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 class ETC_BN_CNN(nn.Module):
     def __init__(self, out_dim=256):

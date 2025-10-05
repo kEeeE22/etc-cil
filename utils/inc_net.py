@@ -157,8 +157,8 @@ class IncrementalNet(BaseNet):
         return fc
 
     def forward(self, x):
-        x = self.convnet(x)  # phải trả về dict với key "features"
-        logits = self.fc(x["features"])  # SimpleLinear
+        x = self.convnet(x)
+        logits = self.fc(x["features"])
         out = {
             "logits": logits,
             "features": x["features"]
