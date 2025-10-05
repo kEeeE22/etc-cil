@@ -28,9 +28,8 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
 
     targets_all = torch.LongTensor(np.arange(num_class))
 
-    for kk in range(0, num_class, batch_size):
-        targets = targets_all[kk: min(kk + batch_size, num_class)].to("cuda")
-
+    for class_id in range(num_class):
+        targets = torch.LongTensor([class_id]).to("cuda")
         model_index = ipc_id // ipc_init - 1
         model_teacher = model_lists[model_index]
         loss_r_feature_layers = loss_packed_features[model_index]
