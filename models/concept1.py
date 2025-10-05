@@ -10,7 +10,7 @@ from models.base import BaseLearner
 from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
-from utils.concept1_utils import infer
+from utils.concept1_utils.infer import infer_gen
 
 
 #distill hyperparameters
@@ -44,6 +44,8 @@ class concept1(BaseLearner):
         self._network = IncrementalNet(args, False)
         self.synthetic_data = []
         self.ufc = []
+        self.model_list = []
+
     def after_task(self):
         self._old_network = self._network.copy().freeze()
         self._known_classes = self._total_classes
@@ -243,9 +245,23 @@ class concept1(BaseLearner):
         ipc_init = int(ipc / M / self._total_classes)
         ipc_end = ipc_init * (M + 1)
 
+        self.model_list = []
+        self.model_list.append(self._network)
+        if self._old_network is not None:
+            self.model_list.append(self._old_network)
+        
+        #debug
+        print(f"🔍 [DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
+        for idx, model in enumerate(self.model_list):
+            model_name = type(model).__name__
+            print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
+
+        total_syn_count = 0
+        total_aufc_count = 0
+
         for ipc_id in range(ipc_start, ipc_end):
-            syn, aufc = infer(
-                model_lists = [self._network, self._old_network], 
+            syn, aufc = infer_gen(
+                model_lists = self.model_list, 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 
                 dataset = train_dataset, 
@@ -258,3 +274,17 @@ class concept1(BaseLearner):
             
             self.synthetic_data.extend(syn)
             self.ufc.extend(aufc)
+            
+            #debug 
+            syn_count = len(syn) if syn is not None else 0
+            aufc_count = len(aufc) if aufc is not None else 0
+            total_syn_count += syn_count
+            total_aufc_count += aufc_count
+
+            print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
+            print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
+        print("\n✅ [DEBUG] Synthetic data generation complete.")
+        print(f"   → Total synthetic samples generated this task: {total_syn_count}")
+        print(f"   → Total activation features collected this task: {total_aufc_count}")
+        print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
+        print(f"   → Cumulative aufc length: {len(self.ufc)}\n")

@@ -12,7 +12,7 @@ jitter = 4
 first_bn_multiplier = 10.0
 r_bn = 1
 
-def infer(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size, init_path, ipc_init, store_best_images):
+def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size, init_path, ipc_init, store_best_images):
     print("get_images call")
     save_every = 100
     best_cost = 1e4
