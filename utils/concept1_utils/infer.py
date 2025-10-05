@@ -4,124 +4,138 @@ import numpy as np
 import random
 from torch import optim
 import collections
-import os 
+import os
+from PIL import Image
+from torchvision import transforms
+
 from utils.concept1_utils.utils import clip_image, denormalize_image, BNFeatureHook, lr_cosine_policy, save_images
 
 
+# Distillation hyperparams
 jitter = 4
 first_bn_multiplier = 10.0
 r_bn = 1
 
-def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size, init_path, ipc_init, known_classes, store_best_images):
+
+def infer_gen(
+    model_lists,
+    ipc_id,
+    num_class,
+    dataset,
+    iteration,
+    lr,
+    init_path,
+    ipc_init,
+    store_best_images,
+    known_classes=0,
+    dataset_name="etc_256"
+):
     print("get_images call")
     save_every = 100
-    best_cost = 1e4
-    syn = []   
-    ufc = []
+    syn, ufc = [], []
+
+    # --- Tạo BN hooks ---
     loss_packed_features = [
         [BNFeatureHook(module) for module in model.modules() if isinstance(module, nn.BatchNorm2d)]
         for model in model_lists
     ]
 
-    if len(loss_packed_features) > 2 and len(loss_packed_features[2]) > 1:
-        loss_packed_features[2].pop(1)  
+    # --- Chọn model ---
+    if len(model_lists) == 1:
+        model_index = 0
+    elif len(model_lists) == 2:
+        half = ipc_init
+        model_index = 0 if ipc_id < half else 1
+    else:
+        model_index = min(ipc_id // ipc_init, len(model_lists) - 1)
 
-    targets_all = torch.LongTensor(np.arange(num_class))
+    model_teacher = model_lists[model_index]
+    loss_r_feature_layers = loss_packed_features[model_index]
 
+    criterion = nn.CrossEntropyLoss().cuda()
+
+    # --- Vòng qua từng class ---
     for class_id in range(num_class):
         targets = torch.LongTensor([class_id]).to("cuda")
-        if len(model_lists) == 1:
-            model_index = 0
-        elif len(model_lists) == 2:
-            half = ipc_init
-            model_index = 0 if ipc_id < half else 1
-        else:
-            # fallback an toàn
-            model_index = min(ipc_id // ipc_init, len(model_lists) - 1)
-
-        model_teacher = model_lists[model_index]
-        loss_r_feature_layers = loss_packed_features[model_index]
-
-        # initialization
         is_old_class = class_id < known_classes
+
+        # === 🔹 Khởi tạo dữ liệu ban đầu ===
         if is_old_class:
-            init_file = f"{init_path}/tensor_class{class_id:03d}.pt"
-            if os.path.exists(init_file):
-                loaded_tensor = torch.load(init_file).clone()
-                input_original = loaded_tensor.to("cuda").detach()
-                print(f"[OLD] Loaded init tensor for class {class_id} from {init_file}")
+            # Load từ file .jpg
+            jpg_dir = f"{init_path}/new{class_id:03d}"
+            if os.path.exists(jpg_dir) and len(os.listdir(jpg_dir)) > 0:
+                jpg_file = sorted(os.listdir(jpg_dir))[0]
+                img_path = os.path.join(jpg_dir, jpg_file)
+                img = Image.open(img_path).convert("L" if dataset_name == "etc_256" else "RGB")
+                transform = transforms.ToTensor()
+                input_original = transform(img).unsqueeze(0).to("cuda")
+                print(f"[OLD] Loaded synthetic init for class {class_id} from {img_path}")
             else:
-                print(f"[WARN] Missing tensor for class {class_id}, fallback random init")
+                print(f"[WARN] Missing jpg for class {class_id}, fallback random init")
                 rand_idx = random.randint(0, len(dataset) - 1)
                 _, img, _ = dataset[rand_idx]
                 input_original = img.unsqueeze(0).to("cuda").detach()
         else:
+            # Random cho class mới
             rand_idx = random.randint(0, len(dataset) - 1)
             _, img, _ = dataset[rand_idx]
             input_original = img.unsqueeze(0).to("cuda").detach()
             print(f"[NEW] Random init for class {class_id}")
-            
+
+        # === 🔹 Distillation optimization ===
         uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda")
+        optimizer = optim.Adam([uni_perb], lr=lr, betas=(0.5, 0.9), eps=1e-8)
+        lr_scheduler = lr_cosine_policy(lr, 0, iteration)
+        best_inputs, best_cost = None, 1e4
 
-        iterations_per_layer = iteration if ipc_id >= ipc_init else 0
-        inputs = input_original if iterations_per_layer == 0 else input_original + uni_perb
-
-        optimizer = optim.Adam([uni_perb], lr=lr, betas=[0.5, 0.9], eps=1e-8)
-        lr_scheduler = lr_cosine_policy(lr, 0, iterations_per_layer)
-        criterion = nn.CrossEntropyLoss().cuda()          
-
-        best_inputs = None
-
-        for it in range(iterations_per_layer):
-            # learning rate scheduling
+        for it in range(iteration):
             lr_scheduler(optimizer, it, it)
             inputs = input_original + uni_perb
 
+            # Jitter
             off1, off2 = random.randint(0, jitter), random.randint(0, jitter)
             inputs_jit = torch.roll(inputs, shifts=(off1, off2), dims=(2, 3))
 
-            # forward pass
             optimizer.zero_grad()
             outputs = model_teacher(inputs_jit)["logits"]
-
-            # classification loss
             loss_ce = criterion(outputs, targets)
 
             # BN feature loss
-            rescale = [first_bn_multiplier] + [1.0 for _ in range(len(loss_r_feature_layers) - 1)]
-            loss_r_bn_feature = [
+            rescale = [first_bn_multiplier] + [1.0] * (len(loss_r_feature_layers) - 1)
+            loss_r_bn_feature = torch.stack([
                 mod.r_feature.to(loss_ce.device) * rescale[idx]
-                for (idx, mod) in enumerate(loss_r_feature_layers)
-            ]
-            loss_r_bn_feature = torch.stack(loss_r_bn_feature).sum()
+                for idx, mod in enumerate(loss_r_feature_layers)
+            ]).sum()
 
-            loss_aux = r_bn * loss_r_bn_feature
-            loss = loss_ce + loss_aux
-
-            if it % save_every == 0:
-                print(f"---- iteration {it} ----")
-                print("loss_ce", loss_ce.item())
-                print("loss_r_bn_feature", loss_r_bn_feature.item())
-                print("loss_total", loss.item())
-
-            # update
+            loss = loss_ce + r_bn * loss_r_bn_feature
             loss.backward()
             optimizer.step()
-            print(inputs.data.shape)
-            inputs.data = clip_image(inputs.data, 'etc_256')
+            inputs.data = clip_image(inputs.data, dataset_name)
 
-            if best_cost > loss.item() or it == 1:
+            if loss.item() < best_cost:
                 best_cost = loss.item()
                 best_inputs = inputs.data.clone()
 
-        if best_inputs is not None:
-            best_inputs = denormalize_image(best_inputs, 'etc_256')
-            syn.append((best_inputs.cpu(), targets.cpu()))
+            if it % save_every == 0:
+                print(f"[Class {class_id}] Iter {it}: CE={loss_ce.item():.3f}, BN={loss_r_bn_feature.item():.3f}")
 
+        # === 🔹 Lưu ảnh tốt nhất ===
+        if best_inputs is not None:
+            best_inputs = denormalize_image(best_inputs, dataset_name)
+            syn.append((best_inputs.cpu(), targets.cpu()))
             if store_best_images:
                 save_images(init_path, best_inputs, targets, ipc_id)
+
+                # Lưu .jpg cho class mới
+                if not is_old_class:
+                    dir_path = f"{init_path}/new{class_id:03d}"
+                    os.makedirs(dir_path, exist_ok=True)
+                    jpg_path = f"{dir_path}/class{class_id:03d}_ipc{ipc_id:03d}.jpg"
+                    from torchvision.utils import save_image
+                    save_image(best_inputs, jpg_path)
+                    print(f"[SAVE] Saved synthetic JPG for class {class_id} → {jpg_path}")
 
         optimizer.state = collections.defaultdict(dict)
 
     torch.cuda.empty_cache()
-    return syn, ufc 
+    return syn, ufc

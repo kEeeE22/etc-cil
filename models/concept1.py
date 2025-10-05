@@ -259,19 +259,19 @@ class concept1(BaseLearner):
         total_syn_count = 0
         total_aufc_count = 0
 
-        for ipc_id in range(ipc_start, ipc_end):
+        for ipc_id in range(ipc):
             syn, aufc = infer_gen(
                 model_lists = self.model_list, 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 
                 dataset = train_dataset, 
                 iteration = distill_epochs, 
-                lr = distill_lr, 
-                batch_size=self._total_classes, 
+                lr = distill_lr,  
                 init_path='./syn', 
                 ipc_init=ipc_init, 
                 known_classes=self._known_classes,
-                store_best_images = True)
+                store_best_images = True,
+                dataset_name='etc_256')
             
             self.synthetic_data.extend(syn)
             self.ufc.extend(aufc)
