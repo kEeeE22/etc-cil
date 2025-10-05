@@ -11,7 +11,7 @@ from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
 from utils.concept1_utils.infer import infer_gen
-
+from utils.concept1_utils.utils import load_synthetic_dataset_as_numpy
 
 #distill hyperparameters
 distill_lr = 0.01
@@ -42,8 +42,6 @@ class concept1(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
-        self.synthetic_data = []
-        self.ufc = []
         self.model_list = []
 
     def after_task(self):
@@ -62,12 +60,30 @@ class concept1(BaseLearner):
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
+        appendent = self._get_memory()
+        syn_data = load_synthetic_dataset_as_numpy("./syn", dataset_name="etc_256")
 
+        if syn_data is not None:
+            syn_images_np, syn_targets_np = syn_data
+
+            if self._cur_task > 0:
+                mask = syn_targets_np < self._known_classes
+                syn_images_np = syn_images_np[mask]
+                syn_targets_np = syn_targets_np[mask]
+
+            # Nối synthetic với exemplar
+            if appendent is not None and len(appendent) != 0:
+                appendent_data, appendent_targets = appendent
+                appendent_data = np.concatenate([appendent_data, syn_images_np])
+                appendent_targets = np.concatenate([appendent_targets, syn_targets_np])
+                appendent = (appendent_data, appendent_targets)
+            else:
+                appendent = (syn_images_np, syn_targets_np)
         train_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
-            appendent=self._get_memory(),
+            appendent=appendent,
         )
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
@@ -244,12 +260,16 @@ class concept1(BaseLearner):
 
         ipc_init = int(ipc / M / self._total_classes)
         ipc_end = ipc_init * (M + 1)
-
+        
         self.model_list = []
         self.model_list.append(self._network)
         if self._old_network is not None:
             self.model_list.append(self._old_network)
-        
+        for model in self.model_list:
+            model.eval()
+            model.to("cuda")
+
+        torch.cuda.empty_cache()
         #debug
         print(f"🔍 [DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
         for idx, model in enumerate(self.model_list):
@@ -273,8 +293,8 @@ class concept1(BaseLearner):
                 store_best_images = True,
                 dataset_name='etc_256')
             
-            self.synthetic_data.extend(syn)
-            self.ufc.extend(aufc)
+            # self.synthetic_data.extend(syn)
+            # self.ufc.extend(aufc)
             
             #debug 
             syn_count = len(syn) if syn is not None else 0
@@ -282,10 +302,10 @@ class concept1(BaseLearner):
             total_syn_count += syn_count
             total_aufc_count += aufc_count
 
-            print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
-            print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
-        print("\n✅ [DEBUG] Synthetic data generation complete.")
+        #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
+        #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
+        # print("\n✅ [DEBUG] Synthetic data generation complete.")
         print(f"   → Total synthetic samples generated this task: {total_syn_count}")
         print(f"   → Total activation features collected this task: {total_aufc_count}")
-        print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
-        print(f"   → Cumulative aufc length: {len(self.ufc)}\n")
+        # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
+        # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")

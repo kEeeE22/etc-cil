@@ -155,3 +155,48 @@ def save_images_ufc(syn_data_path, images, targets, ipc_id, model_index):
         image_np = images[id].data.cpu().numpy().transpose((1, 2, 0))
         pil_image = Image.fromarray((image_np * 255).astype(np.uint8))
         pil_image.save(place_to_store)
+
+from PIL import Image
+from torchvision import transforms
+import numpy as np
+import os
+
+def load_synthetic_dataset_as_numpy(syn_root="./syn", dataset_name="etc_256"):
+    """
+    Load all synthetic JPG images (distilled samples) from disk as numpy arrays.
+    Returns (images_np, targets_np)
+    """
+    if not os.path.exists(syn_root):
+        print(f"[WARN] Synthetic folder '{syn_root}' not found.")
+        return None
+
+    images, targets = [], []
+    transform = transforms.ToTensor()
+    print(f"📦 Loading synthetic data from {syn_root} ...")
+
+    for class_dir in sorted(os.listdir(syn_root)):
+        class_path = os.path.join(syn_root, class_dir)
+        if not os.path.isdir(class_path):
+            continue
+        try:
+            class_id = int(class_dir.replace("new", ""))
+        except:
+            continue
+
+        for fname in os.listdir(class_path):
+            if not fname.endswith(".jpg"):
+                continue
+            img_path = os.path.join(class_path, fname)
+            img = Image.open(img_path).convert("L" if dataset_name == "etc_256" else "RGB")
+            img_tensor = transform(img)
+            images.append(img_tensor.numpy())
+            targets.append(class_id)
+
+    if len(images) == 0:
+        print("[INFO] No synthetic samples found.")
+        return None
+
+    images_np = np.stack(images)
+    targets_np = np.array(targets)
+    print(f"✅ Loaded {len(images_np)} synthetic images across {len(np.unique(targets_np))} classes.")
+    return images_np, targets_np

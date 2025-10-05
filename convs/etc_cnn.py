@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-class ETC_CNN(nn.Module):
+class ETC_BN_CNN(nn.Module):
     def __init__(self, out_dim=256):
         super(ETC_CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=5, padding='same')
@@ -57,7 +57,7 @@ class ETC_CNN(nn.Module):
         }
     
 
-class ETC_BN_CNN(nn.Module):
+class ETC_CNN(nn.Module):
     def __init__(self, out_dim=256):
         super(ETC_CNN, self).__init__()
         # Block 1
