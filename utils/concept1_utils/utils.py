@@ -19,11 +19,16 @@ def clip_image(image_tensor, dataset: str) -> torch.Tensor:
         mean = np.array([0.4802, 0.4481, 0.3975])
         std = np.array([0.2302, 0.2265, 0.2262])
     elif dataset == 'etc_256':
-        mean = np.array([0.5, 0.5])
-        std = np.array([0.5, 0.5])
-    for c in range(3):
-        m, s = mean[c], std[c]
-        image_tensor[:, c] = torch.clamp(image_tensor[:, c], -m / s, (1 - m) / s)
+        mean = np.array([0.5])
+        std = np.array([0.5])
+    n_channels = image_tensor.shape[1]
+    mean = torch.tensor(mean, device=image_tensor.device).view(1, -1, 1, 1)
+    std = torch.tensor(std, device=image_tensor.device).view(1, -1, 1, 1)
+
+    min_val = (-mean / std).expand_as(image_tensor)
+    max_val = ((1 - mean) / std).expand_as(image_tensor)
+
+    image_tensor = torch.max(torch.min(image_tensor, max_val), min_val)
     return image_tensor
 
 
@@ -41,12 +46,16 @@ def denormalize_image(image_tensor, dataset: str) -> torch.Tensor:
         mean = np.array([0.4802, 0.4481, 0.3975])
         std = np.array([0.2302, 0.2265, 0.2262])
     elif dataset == 'etc_256':
-        mean = np.array([0.5, 0.5])
-        std = np.array([0.5, 0.5])
-    for c in range(3):
-        m, s = mean[c], std[c]
-        image_tensor[:, c] = torch.clamp(image_tensor[:, c] * s + m, 0, 1)
+        mean = np.array([0.5])
+        std = np.array([0.5])
+    n_channels = image_tensor.shape[1]
+    mean = torch.tensor(mean, device=image_tensor.device).view(1, -1, 1, 1)
+    std = torch.tensor(std, device=image_tensor.device).view(1, -1, 1, 1)
 
+    min_val = (-mean / std).expand_as(image_tensor)
+    max_val = ((1 - mean) / std).expand_as(image_tensor)
+
+    image_tensor = torch.max(torch.min(image_tensor, max_val), min_val)
     return image_tensor
 
 
@@ -89,22 +98,42 @@ def lr_cosine_policy(base_lr, warmup_length, epochs):
 
 def save_images(syn_data_path, images, targets, ipc_id):
     for id in range(images.shape[0]):
+        # Xác định class ID
         if targets.ndimension() == 1:
             class_id = targets[id].item()
         else:
             class_id = targets[id].argmax().item()
 
-        if not os.path.exists(syn_data_path):
-            os.mkdir(syn_data_path)
+        # Tạo thư mục lưu
+        dir_path = f'{syn_data_path}/new{class_id:03d}'
+        os.makedirs(dir_path, exist_ok=True)
+        place_to_store = f'{dir_path}/class{class_id:03d}_id{ipc_id:03d}.jpg'
 
-        # save into separate folders
-        dir_path = '{}/new{:03d}'.format(syn_data_path, class_id)
-        place_to_store = dir_path + '/class{:03d}_id{:03d}.jpg'.format(class_id, ipc_id)
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
+        # Lấy ảnh
+        image_np = images[id].data.cpu().numpy()
 
-        image_np = images[id].data.cpu().numpy().transpose((1, 2, 0))
-        pil_image = Image.fromarray((image_np * 255).astype(np.uint8))
+        # Nếu có 3 chiều (C, H, W)
+        if image_np.ndim == 3:
+            image_np = np.transpose(image_np, (1, 2, 0))
+
+            # Nếu chỉ 1 kênh, chuyển về 2D (H, W)
+            if image_np.shape[2] == 1:
+                image_np = image_np.squeeze(2)
+                mode = "L"  # grayscale
+            elif image_np.shape[2] == 3:
+                mode = "RGB"
+            else:
+                raise ValueError(f"Unsupported channel count: {image_np.shape[2]}")
+        elif image_np.ndim == 2:
+            mode = "L"
+        else:
+            raise ValueError(f"Unexpected image shape: {image_np.shape}")
+
+        # Chuẩn hóa về [0,255]
+        image_np = np.clip(image_np * 255.0, 0, 255).astype(np.uint8)
+
+        # Tạo ảnh PIL đúng mode
+        pil_image = Image.fromarray(image_np, mode=mode)
         pil_image.save(place_to_store)
 
 def save_images_ufc(syn_data_path, images, targets, ipc_id, model_index):

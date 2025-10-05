@@ -12,7 +12,7 @@ jitter = 4
 first_bn_multiplier = 10.0
 r_bn = 1
 
-def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size, init_path, ipc_init, store_best_images):
+def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size, init_path, ipc_init, known_classes, store_best_images):
     print("get_images call")
     save_every = 100
     best_cost = 1e4
@@ -30,19 +30,36 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
 
     for class_id in range(num_class):
         targets = torch.LongTensor([class_id]).to("cuda")
-        model_index = ipc_id // ipc_init - 1
+        if len(model_lists) == 1:
+            model_index = 0
+        elif len(model_lists) == 2:
+            half = ipc_init
+            model_index = 0 if ipc_id < half else 1
+        else:
+            # fallback an toàn
+            model_index = min(ipc_id // ipc_init, len(model_lists) - 1)
+
         model_teacher = model_lists[model_index]
         loss_r_feature_layers = loss_packed_features[model_index]
 
         # initialization
-        init_file = f"{init_path}/tensor_{ipc_id % ipc_init}.pt"
-        if os.path.exists(init_file):
-            loaded_tensor = torch.load(init_file).clone()
-            input_original = loaded_tensor.to("cuda").detach()
+        is_old_class = class_id < known_classes
+        if is_old_class:
+            init_file = f"{init_path}/tensor_class{class_id:03d}.pt"
+            if os.path.exists(init_file):
+                loaded_tensor = torch.load(init_file).clone()
+                input_original = loaded_tensor.to("cuda").detach()
+                print(f"[OLD] Loaded init tensor for class {class_id} from {init_file}")
+            else:
+                print(f"[WARN] Missing tensor for class {class_id}, fallback random init")
+                rand_idx = random.randint(0, len(dataset) - 1)
+                _, img, _ = dataset[rand_idx]
+                input_original = img.unsqueeze(0).to("cuda").detach()
         else:
             rand_idx = random.randint(0, len(dataset) - 1)
             _, img, _ = dataset[rand_idx]
             input_original = img.unsqueeze(0).to("cuda").detach()
+            print(f"[NEW] Random init for class {class_id}")
             
         uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda")
 
@@ -90,21 +107,20 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
             # update
             loss.backward()
             optimizer.step()
-            inputs.data = clip_image(inputs.data, dataset)
+            print(inputs.data.shape)
+            inputs.data = clip_image(inputs.data, 'etc_256')
 
             if best_cost > loss.item() or it == 1:
                 best_cost = loss.item()
                 best_inputs = inputs.data.clone()
 
-        # nếu có synthetic images thì lưu vào syn
         if best_inputs is not None:
-            best_inputs = denormalize_image(best_inputs, dataset)  # chuẩn hóa lại
+            best_inputs = denormalize_image(best_inputs, 'etc_256')
             syn.append((best_inputs.cpu(), targets.cpu()))
 
             if store_best_images:
                 save_images(init_path, best_inputs, targets, ipc_id)
 
-        # free optimizer state
         optimizer.state = collections.defaultdict(dict)
 
     torch.cuda.empty_cache()

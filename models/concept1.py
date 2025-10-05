@@ -26,12 +26,12 @@ ipc=10
 #incremental learning hyperparameters
 batch_size = 128
 num_workers = 4
-init_epoch = 5
+init_epoch = 2
 init_lr = 0.1
 init_milestones = [60, 80]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
-epochs = 5
+epochs = 2
 lrate = 0.1
 milestones = [60, 80]
 lrate_decay = 0.1
@@ -270,6 +270,7 @@ class concept1(BaseLearner):
                 batch_size=self._total_classes, 
                 init_path='./syn', 
                 ipc_init=ipc_init, 
+                known_classes=self._known_classes,
                 store_best_images = True)
             
             self.synthetic_data.extend(syn)
