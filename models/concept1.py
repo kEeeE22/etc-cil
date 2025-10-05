@@ -267,7 +267,7 @@ class concept1(BaseLearner):
                 dataset = train_dataset, 
                 iteration = distill_epochs, 
                 lr = distill_lr, 
-                batch_size=distill_batch_size, 
+                batch_size=self._total_classes, 
                 init_path='./syn', 
                 ipc_init=ipc_init, 
                 store_best_images = True)

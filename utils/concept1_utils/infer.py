@@ -16,7 +16,7 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
     print("get_images call")
     save_every = 100
     best_cost = 1e4
-    syn = []   # chứa synthetic data
+    syn = []   
     ufc = []
     loss_packed_features = [
         [BNFeatureHook(module) for module in model.modules() if isinstance(module, nn.BatchNorm2d)]
@@ -42,7 +42,7 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
             input_original = loaded_tensor.to("cuda").detach()
         else:
             rand_idx = random.randint(0, len(dataset) - 1)
-            img, _ = dataset[rand_idx]
+            _, img, _ = dataset[rand_idx]
             input_original = img.unsqueeze(0).to("cuda").detach()
             
         uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda")
@@ -66,7 +66,7 @@ def infer_gen(model_lists, ipc_id, num_class, dataset, iteration, lr, batch_size
 
             # forward pass
             optimizer.zero_grad()
-            outputs = model_teacher(inputs_jit)
+            outputs = model_teacher(inputs_jit)["logits"]
 
             # classification loss
             loss_ce = criterion(outputs, targets)
