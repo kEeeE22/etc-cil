@@ -56,6 +56,7 @@ def infer_gen(
 
     # --- Vòng qua từng class ---
     for class_id in range(num_class):
+        model_teacher.eval()
         targets = torch.LongTensor([class_id]).to("cuda")
         is_old_class = class_id < known_classes
 
@@ -97,8 +98,8 @@ def infer_gen(
             inputs_jit = torch.roll(inputs, shifts=(off1, off2), dims=(2, 3))
 
             optimizer.zero_grad()
-            with torch.no_grad():
-                outputs = model_teacher(inputs_jit)["logits"]
+
+            outputs = model_teacher(inputs_jit)["logits"]
             loss_ce = criterion(outputs, targets)
 
             # BN feature loss

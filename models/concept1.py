@@ -65,7 +65,8 @@ class concept1(BaseLearner):
 
         if syn_data is not None:
             syn_images_np, syn_targets_np = syn_data
-
+            if syn_images_np.ndim == 4 and syn_images_np.shape[1] == 1:
+                syn_images_np = syn_images_np.squeeze(1)
             if self._cur_task > 0:
                 mask = syn_targets_np < self._known_classes
                 syn_images_np = syn_images_np[mask]
