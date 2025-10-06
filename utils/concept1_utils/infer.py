@@ -97,7 +97,8 @@ def infer_gen(
             inputs_jit = torch.roll(inputs, shifts=(off1, off2), dims=(2, 3))
 
             optimizer.zero_grad()
-            outputs = model_teacher(inputs_jit)["logits"]
+            with torch.no_grad():
+                outputs = model_teacher(inputs_jit)["logits"]
             loss_ce = criterion(outputs, targets)
 
             # BN feature loss
@@ -136,6 +137,10 @@ def infer_gen(
                     print(f"[SAVE] Saved synthetic JPG for class {class_id} → {jpg_path}")
 
         optimizer.state = collections.defaultdict(dict)
-
+    for hooks in loss_packed_features:
+        for h in hooks:
+            del h
+    torch.cuda.empty_cache()
+    del optimizer, uni_perb
     torch.cuda.empty_cache()
     return syn, ufc
