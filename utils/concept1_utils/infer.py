@@ -7,7 +7,7 @@ import collections
 import os
 from PIL import Image
 from torchvision import transforms
-
+from torchvision.utils import save_image
 from utils.concept1_utils.utils import clip_image, denormalize_image, BNFeatureHook, lr_cosine_policy, save_images
 
 
@@ -56,13 +56,11 @@ def infer_gen(
 
     # --- Vòng qua từng class ---
     for class_id in range(num_class):
-        model_teacher.eval()
         targets = torch.LongTensor([class_id]).to("cuda")
         is_old_class = class_id < known_classes
 
         # === 🔹 Khởi tạo dữ liệu ban đầu ===
         if is_old_class:
-            # Load từ file .jpg
             jpg_dir = f"{init_path}/new{class_id:03d}"
             if os.path.exists(jpg_dir) and len(os.listdir(jpg_dir)) > 0:
                 jpg_file = sorted(os.listdir(jpg_dir))[0]
@@ -129,13 +127,13 @@ def infer_gen(
                 save_images(init_path, best_inputs, targets, ipc_id)
 
                 # Lưu .jpg cho class mới
-                if not is_old_class:
-                    dir_path = f"{init_path}/new{class_id:03d}"
-                    os.makedirs(dir_path, exist_ok=True)
-                    jpg_path = f"{dir_path}/class{class_id:03d}_ipc{ipc_id:03d}.jpg"
-                    from torchvision.utils import save_image
-                    save_image(best_inputs, jpg_path)
-                    print(f"[SAVE] Saved synthetic JPG for class {class_id} → {jpg_path}")
+                # if not is_old_class:
+                #     dir_path = f"{init_path}/new{class_id:03d}"
+                #     os.makedirs(dir_path, exist_ok=True)
+                #     jpg_path = f"{dir_path}/class{class_id:03d}_ipc{ipc_id:03d}.jpg"
+
+                #     save_image(best_inputs, jpg_path)
+                #     print(f"[SAVE] Saved synthetic JPG for class {class_id} → {jpg_path}")
 
         optimizer.state = collections.defaultdict(dict)
     for hooks in loss_packed_features:
