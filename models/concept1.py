@@ -106,8 +106,6 @@ class concept1(BaseLearner):
 
     def _train(self, train_loader, test_loader):
         self._network.to(self._device)
-        if self._old_network is not None:
-            self._old_network.to(self._device)
 
         if self._cur_task == 0:
             optimizer = optim.SGD(
@@ -302,7 +300,8 @@ class concept1(BaseLearner):
             aufc_count = len(aufc) if aufc is not None else 0
             total_syn_count += syn_count
             total_aufc_count += aufc_count
-
+        for model in self.model_list:
+            model.to("cpu")
         #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
         #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
         # print("\n✅ [DEBUG] Synthetic data generation complete.")
