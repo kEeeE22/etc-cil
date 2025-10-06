@@ -157,51 +157,7 @@ from torchvision import transforms
 import numpy as np
 import os
 
-def load_synthetic_dataset_as_numpy(syn_root="./syn", dataset_name="etc_256"):
-    """
-    Load all synthetic JPG images (distilled samples) from disk as numpy arrays.
-    Returns (images_np, targets_np)
-    """
-    if not os.path.exists(syn_root):
-        print(f"[WARN] Synthetic folder '{syn_root}' not found.")
-        return None
-
-    images, targets = [], []
-    transform = transforms.ToTensor()
-    print(f"📦 Loading synthetic data from {syn_root} ...")
-
-    for class_dir in sorted(os.listdir(syn_root)):
-        class_path = os.path.join(syn_root, class_dir)
-        if not os.path.isdir(class_path):
-            continue
-        try:
-            class_id = int(class_dir.replace("new", ""))
-        except:
-            continue
-
-        for fname in os.listdir(class_path):
-            if not fname.endswith(".jpg"):
-                continue
-            img_path = os.path.join(class_path, fname)
-            img = Image.open(img_path).convert("L" if dataset_name == "etc_256" else "RGB")
-            img_tensor = transform(img)
-            images.append(img_tensor.numpy())
-            targets.append(class_id)
-
-    if len(images) == 0:
-        print("[INFO] No synthetic samples found.")
-        return None
-
-    images_np = np.stack(images)
-    targets_np = np.array(targets)
-    print(f"✅ Loaded {len(images_np)} synthetic images across {len(np.unique(targets_np))} classes.")
-    return images_np, targets_np
-
 class SyntheticImageFolder(Dataset):
-    """
-    Dataset lazy-load các ảnh synthetic từ thư mục ./syn
-    Không load toàn bộ ảnh vào RAM — chỉ load khi __getitem__ được gọi.
-    """
     def __init__(self, syn_root="./syn", dataset_name="etc_256", known_classes=0, transform=None, cur_task=0):
         self.samples = []
         self.dataset_name = dataset_name
@@ -237,6 +193,13 @@ class SyntheticImageFolder(Dataset):
 
     def __getitem__(self, idx):
         img_path, class_id = self.samples[idx]
-        img = Image.open(img_path).convert("L" if self.dataset_name == "etc_256" else "RGB")
-        img = self.transform(img)
-        return img, class_id
+        with Image.open(img_path) as img:
+            img = Image.open(img_path).convert("L" if self.dataset_name == "etc_256" else "RGB")
+
+            if self.transform is not None:
+                img = self.transform(img)
+            else:
+                img = transforms.ToTensor()(img)
+
+        # trả về theo format DataManager expects
+        return idx, img, class_id

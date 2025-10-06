@@ -127,8 +127,11 @@ def infer_gen(
                 #     print(f"[SAVE] Saved synthetic JPG for class {class_id} → {jpg_path}")
 
         optimizer.state = collections.defaultdict(dict)
+        del outputs, loss_ce, loss_r_bn_feature, loss
+        torch.cuda.empty_cache()
     for hooks in loss_packed_features:
         for h in hooks:
+            h.close()
             del h
     torch.cuda.empty_cache()
     del optimizer, uni_perb
