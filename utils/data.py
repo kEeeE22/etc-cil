@@ -44,8 +44,9 @@ class iETC256(iData):
     use_path = False
     train_trsf = [
         transforms.Resize((20, 256)),
-        transforms.Normalize(mean=[0.5], std=[0.5]),
+        
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5]),
     ]
     test_trsf = [
         transforms.Resize((20, 256)),
