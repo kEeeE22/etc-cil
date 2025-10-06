@@ -300,8 +300,9 @@ class concept1(BaseLearner):
             aufc_count = len(aufc) if aufc is not None else 0
             total_syn_count += syn_count
             total_aufc_count += aufc_count
-        for model in self.model_list:
-            model.to("cpu")
+        if self._old_network is not None:
+            self._old_network.to('cpu')
+            torch.cuda.empty_cache()
         #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
         #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
         # print("\n✅ [DEBUG] Synthetic data generation complete.")

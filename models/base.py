@@ -82,6 +82,7 @@ class BaseLearner(object):
         return ret
 
     def eval_task(self, save_conf=False):
+        self._network.to(self._device)
         y_pred, y_true = self._eval_cnn(self.test_loader)
         cnn_accy = self._evaluate(y_pred, y_true)
 

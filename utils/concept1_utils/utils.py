@@ -104,22 +104,18 @@ def save_images(syn_data_path, images, targets, ipc_id):
         else:
             class_id = targets[id].argmax().item()
 
-        # Tạo thư mục lưu
         dir_path = f'{syn_data_path}/new{class_id:03d}'
         os.makedirs(dir_path, exist_ok=True)
         place_to_store = f'{dir_path}/class{class_id:03d}_id{ipc_id:03d}.jpg'
 
-        # Lấy ảnh
         image_np = images[id].data.cpu().numpy()
 
-        # Nếu có 3 chiều (C, H, W)
         if image_np.ndim == 3:
             image_np = np.transpose(image_np, (1, 2, 0))
 
-            # Nếu chỉ 1 kênh, chuyển về 2D (H, W)
             if image_np.shape[2] == 1:
                 image_np = image_np.squeeze(2)
-                mode = "L"  # grayscale
+                mode = "L"
             elif image_np.shape[2] == 3:
                 mode = "RGB"
             else:

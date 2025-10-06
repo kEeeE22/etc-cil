@@ -34,13 +34,11 @@ def infer_gen(
     save_every = 100
     syn, ufc = [], []
 
-    # --- Tạo BN hooks ---
     loss_packed_features = [
         [BNFeatureHook(module) for module in model.modules() if isinstance(module, nn.BatchNorm2d)]
         for model in model_lists
     ]
 
-    # --- Chọn model ---
     if len(model_lists) == 1:
         model_index = 0
     elif len(model_lists) == 2:
@@ -54,12 +52,10 @@ def infer_gen(
 
     criterion = nn.CrossEntropyLoss().cuda()
 
-    # --- Vòng qua từng class ---
     for class_id in range(num_class):
         targets = torch.LongTensor([class_id]).to("cuda")
         is_old_class = class_id < known_classes
 
-        # === 🔹 Khởi tạo dữ liệu ban đầu ===
         if is_old_class:
             jpg_dir = f"{init_path}/new{class_id:03d}"
             if os.path.exists(jpg_dir) and len(os.listdir(jpg_dir)) > 0:
@@ -75,14 +71,12 @@ def infer_gen(
                 _, img, _ = dataset[rand_idx]
                 input_original = img.unsqueeze(0).to("cuda").detach()
         else:
-            # Random cho class mới
             rand_idx = random.randint(0, len(dataset) - 1)
             _, img, _ = dataset[rand_idx]
             input_original = img.unsqueeze(0).to("cuda").detach()
             print(f"[NEW] Random init for class {class_id}")
 
-        # === 🔹 Distillation optimization ===
-        uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda")
+        uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda", dtype=torch.float)
         optimizer = optim.Adam([uni_perb], lr=lr, betas=(0.5, 0.9), eps=1e-8)
         lr_scheduler = lr_cosine_policy(lr, 0, iteration)
         best_inputs, best_cost = None, 1e4
@@ -91,7 +85,6 @@ def infer_gen(
             lr_scheduler(optimizer, it, it)
             inputs = input_original + uni_perb
 
-            # Jitter
             off1, off2 = random.randint(0, jitter), random.randint(0, jitter)
             inputs_jit = torch.roll(inputs, shifts=(off1, off2), dims=(2, 3))
 
@@ -100,7 +93,6 @@ def infer_gen(
             outputs = model_teacher(inputs_jit)["logits"]
             loss_ce = criterion(outputs, targets)
 
-            # BN feature loss
             rescale = [first_bn_multiplier] + [1.0] * (len(loss_r_feature_layers) - 1)
             loss_r_bn_feature = torch.stack([
                 mod.r_feature.to(loss_ce.device) * rescale[idx]
@@ -119,7 +111,6 @@ def infer_gen(
             if it % save_every == 0:
                 print(f"[Class {class_id}] Iter {it}: CE={loss_ce.item():.3f}, BN={loss_r_bn_feature.item():.3f}")
 
-        # === 🔹 Lưu ảnh tốt nhất ===
         if best_inputs is not None:
             best_inputs = denormalize_image(best_inputs, dataset_name)
             syn.append((best_inputs.cpu(), targets.cpu()))
