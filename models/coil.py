@@ -12,7 +12,7 @@ from utils.inc_net import (
     SimpleCosineIncrementalNet,
 )
 from utils.toolkit import target2onehot, tensor2numpy
-import ot
+import os
 from torch import nn
 import copy
 

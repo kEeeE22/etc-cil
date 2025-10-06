@@ -3,7 +3,7 @@ import os
 from PIL import Image
 import torch
 import torch.nn as nn
-
+from torch.utils.data import Dataset
 def clip_image(image_tensor, dataset: str) -> torch.Tensor:
     """
     adjust the input w.r.t mean and variance
@@ -196,3 +196,47 @@ def load_synthetic_dataset_as_numpy(syn_root="./syn", dataset_name="etc_256"):
     targets_np = np.array(targets)
     print(f"✅ Loaded {len(images_np)} synthetic images across {len(np.unique(targets_np))} classes.")
     return images_np, targets_np
+
+class SyntheticImageFolder(Dataset):
+    """
+    Dataset lazy-load các ảnh synthetic từ thư mục ./syn
+    Không load toàn bộ ảnh vào RAM — chỉ load khi __getitem__ được gọi.
+    """
+    def __init__(self, syn_root="./syn", dataset_name="etc_256", known_classes=0, transform=None, cur_task=0):
+        self.samples = []
+        self.dataset_name = dataset_name
+        self.transform = transform or transforms.ToTensor()
+        self.known_classes = known_classes
+        self.cur_task = cur_task
+
+        if not os.path.exists(syn_root):
+            print(f"[WARN] Synthetic folder '{syn_root}' not found.")
+            return
+
+        for class_dir in sorted(os.listdir(syn_root)):
+            if not class_dir.startswith("new"):
+                continue
+            try:
+                class_id = int(class_dir.replace("new", ""))
+            except:
+                continue
+
+            # Nếu là task sau, chỉ load class cũ
+            if self.cur_task > 0 and class_id >= self.known_classes:
+                continue
+
+            class_path = os.path.join(syn_root, class_dir)
+            for fname in os.listdir(class_path):
+                if fname.endswith(".jpg"):
+                    self.samples.append((os.path.join(class_path, fname), class_id))
+
+        print(f"📂 SyntheticImageFolder loaded {len(self.samples)} images from {syn_root}")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, class_id = self.samples[idx]
+        img = Image.open(img_path).convert("L" if self.dataset_name == "etc_256" else "RGB")
+        img = self.transform(img)
+        return img, class_id

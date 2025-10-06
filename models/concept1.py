@@ -5,13 +5,14 @@ import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset,DataLoader
+from torchvision import transforms
 from models.base import BaseLearner
 from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
 from utils.concept1_utils.infer import infer_gen
-from utils.concept1_utils.utils import load_synthetic_dataset_as_numpy
+from utils.concept1_utils.utils import SyntheticImageFolder
 
 #distill hyperparameters
 distill_lr = 0.01
@@ -61,31 +62,26 @@ class concept1(BaseLearner):
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
         appendent = self._get_memory()
-        syn_data = load_synthetic_dataset_as_numpy("./syn", dataset_name="etc_256")
 
-        if syn_data is not None:
-            syn_images_np, syn_targets_np = syn_data
-            if syn_images_np.ndim == 4 and syn_images_np.shape[1] == 1:
-                syn_images_np = syn_images_np.squeeze(1)
-            if self._cur_task > 0:
-                mask = syn_targets_np < self._known_classes
-                syn_images_np = syn_images_np[mask]
-                syn_targets_np = syn_targets_np[mask]
-
-            # Nối synthetic với exemplar
-            if appendent is not None and len(appendent) != 0:
-                appendent_data, appendent_targets = appendent
-                appendent_data = np.concatenate([appendent_data, syn_images_np])
-                appendent_targets = np.concatenate([appendent_targets, syn_targets_np])
-                appendent = (appendent_data, appendent_targets)
-            else:
-                appendent = (syn_images_np, syn_targets_np)
-        train_dataset = data_manager.get_dataset(
+        base_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
             appendent=appendent,
         )
+        syn_dataset = SyntheticImageFolder(
+            syn_root="./syn",
+            dataset_name="etc_256",
+            known_classes=self._known_classes,
+            cur_task=self._cur_task,
+            transform=transforms.Compose([*data_manager._train_trsf, *data_manager._common_trsf])
+        )
+        if len(syn_dataset) > 0:
+            train_dataset = ConcatDataset([base_dataset, syn_dataset])
+            print(f"✅ Combined real + synthetic datasets: {len(base_dataset)} real, {len(syn_dataset)} synthetic samples.")
+        else:
+            train_dataset = base_dataset
+            print("⚠️ No synthetic data found. Using only real samples.")
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
