@@ -28,12 +28,12 @@ ipc=10
 batch_size = 128
 num_workers = 4
 init_epoch = 2
-init_lr = 0.1
+init_lr = 0.001
 init_milestones = [60, 80]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
 epochs = 2
-lrate = 0.1
+lrate = 0.001
 milestones = [60, 80]
 lrate_decay = 0.1
 weight_decay = 2e-4
@@ -78,10 +78,10 @@ class concept1(BaseLearner):
         )
         if len(syn_dataset) > 0:
             train_dataset = ConcatDataset([base_dataset, syn_dataset])
-            print(f"✅ Combined real + synthetic datasets: {len(base_dataset)} real, {len(syn_dataset)} synthetic samples.")
+            print(f"Combined real + synthetic datasets: {len(base_dataset)} real, {len(syn_dataset)} synthetic samples.")
         else:
             train_dataset = base_dataset
-            print("⚠️ No synthetic data found. Using only real samples.")
+            print("No synthetic data found. Using only real samples.")
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
@@ -266,7 +266,7 @@ class concept1(BaseLearner):
 
         torch.cuda.empty_cache()
         #debug
-        print(f"🔍 [DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
+        print(f"[DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
         for idx, model in enumerate(self.model_list):
             model_name = type(model).__name__
             print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")

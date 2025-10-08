@@ -8,7 +8,7 @@
     "init_cls": 0,
     "increment": 3,
     "model_name": "foster",
-    "convnet_type": "etc_cnn",
+    "convnet_type": "resnet18",
     "device": ["0"],
     "seed": [1993],
     "beta1":0.96,
