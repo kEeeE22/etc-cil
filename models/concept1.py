@@ -108,7 +108,7 @@ class concept1(BaseLearner):
                 self._network.parameters(),
                 momentum=0.9,
                 lr=init_lr,
-                weight_decay=init_weight_decay,
+                # weight_decay=init_weight_decay,
             )
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer=optimizer, milestones=init_milestones, gamma=init_lr_decay

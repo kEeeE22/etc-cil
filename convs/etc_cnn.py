@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-class ETC_BN_CNN(nn.Module):
+class ETC_CNN(nn.Module):
     def __init__(self, out_dim=256):
         super(ETC_CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=5, padding='same')
@@ -57,7 +57,7 @@ class ETC_BN_CNN(nn.Module):
         }
     
 
-class ETC_CNN(nn.Module):
+class ETC_BN_CNN(nn.Module):
     def __init__(self, out_dim=256):
         super(ETC_CNN, self).__init__()
         # Block 1
@@ -133,7 +133,7 @@ class ETC_CNN(nn.Module):
 
 import torch.nn.functional as F
 class ETC_CNN_0_1(nn.Module):
-    def __init__(self, out_dim):
+    def __init__(self, out_dim=256):
         super(ETC_CNN_0_1, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=5, padding='same')
@@ -158,16 +158,16 @@ class ETC_CNN_0_1(nn.Module):
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop2 = nn.Dropout(0.25)
 
-        self.conv5 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding='same')
-        self.bn5 = nn.BatchNorm2d(32)
-        self.relu5 = nn.ReLU()
+        # self.conv5 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding='same')
+        # self.bn5 = nn.BatchNorm2d(32)
+        # self.relu5 = nn.ReLU()
 
-        self.conv6 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding='same')
-        self.bn6 = nn.BatchNorm2d(16)
-        self.relu6 = nn.ReLU()
+        # self.conv6 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding='same')
+        # self.bn6 = nn.BatchNorm2d(16)
+        # self.relu6 = nn.ReLU()
 
-        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.drop3 = nn.Dropout(0.25)
+        # self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # self.drop3 = nn.Dropout(0.25)
 
         # Define convolutional layers sequence
         self.conv_layers = nn.Sequential(
@@ -177,14 +177,14 @@ class ETC_CNN_0_1(nn.Module):
             self.conv3, self.bn3, self.relu3,
             self.conv4, self.bn4, self.relu4,
             self.pool2, self.drop2,
-            self.conv5, self.bn5, self.relu5,
-            self.conv6, self.bn6, self.relu6,
-            self.pool3, self.drop3
+            # self.conv5, self.bn5, self.relu5,
+            # self.conv6, self.bn6, self.relu6,
+            # self.pool3, self.drop3
         )
 
         # Calculate the flattened size dynamically
         with torch.no_grad():
-            dummy_input = torch.zeros(1, 1, 20, 256) # Dummy input with batch size 1, 1 channel, 20x256
+            dummy_input = torch.zeros(1, 1, 20, 256)
             flatten_dim = torch.flatten(self.conv_layers(dummy_input), start_dim=1).shape[1]
 
         self.fc1 = nn.Linear(in_features=flatten_dim, out_features=out_dim)
