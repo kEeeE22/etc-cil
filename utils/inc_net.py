@@ -15,7 +15,7 @@ from convs.memo_resnet import  get_resnet18_imagenet as get_memo_resnet18 #for M
 from convs.memo_cifar_resnet import get_resnet32_a2fc as get_memo_resnet32 #for MEMO cifar
 from convs.ACL_buffer import RandomBuffer, activation_t
 from convs.linears import RecursiveLinear
-from convs.etc_cnn import ETC_CNN
+from convs.etc_cnn import ETC_CNN, ETC_CNN_0_1
 from typing import Dict, Any
 
 
@@ -55,6 +55,8 @@ def get_convnet(args, pretrained=False):
         return _basenet, _adaptive_net
     elif name == 'etc_cnn':
         return ETC_CNN()
+    elif name == 'etc_cnn_0_1':
+        return ETC_CNN_0_1()
     else:
         raise NotImplementedError("Unknown type {}".format(name))
 
