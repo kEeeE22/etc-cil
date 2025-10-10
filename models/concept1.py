@@ -22,18 +22,18 @@ jitter = 0
 ipc_start = 0
 M = 2
 distill_batch_size = 64
-distill_epochs = 5
+distill_epochs = 400
 ipc=10
 
 #incremental learning hyperparameters
 batch_size = 128
 num_workers = 4
-init_epoch = 2
+init_epoch = 150
 init_lr = 0.001
 init_milestones = [60, 80]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
-epochs = 2
+epochs = 150
 lrate = 0.001
 milestones = [60, 80]
 lrate_decay = 0.1
@@ -273,7 +273,6 @@ class concept1(BaseLearner):
             print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
 
         total_syn_count = 0
-        total_aufc_count = 0
         init_inputs = init_synthetic_images(
             num_class=self._total_classes,
             dataset=train_dataset,
@@ -282,7 +281,7 @@ class concept1(BaseLearner):
             known_classes=self._known_classes
         )
         for ipc_id in range(ipc):
-            syn, aufc = infer_gen(
+            syn= infer_gen(
                 model_lists = self.model_list, 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 
@@ -299,9 +298,7 @@ class concept1(BaseLearner):
             
             #debug 
             syn_count = len(syn) if syn is not None else 0
-            aufc_count = len(aufc) if aufc is not None else 0
             total_syn_count += syn_count
-            total_aufc_count += aufc_count
         if self._old_network is not None:
             self._old_network.to('cpu')
             torch.cuda.empty_cache()
@@ -309,6 +306,5 @@ class concept1(BaseLearner):
         #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
         # print("\n✅ [DEBUG] Synthetic data generation complete.")
         print(f"   → Total synthetic samples generated this task: {total_syn_count}")
-        print(f"   → Total activation features collected this task: {total_aufc_count}")
         # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
         # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")
