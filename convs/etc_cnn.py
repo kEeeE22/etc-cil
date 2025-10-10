@@ -170,7 +170,7 @@ class ETC_CNN_0_1(nn.Module):
         x = self.drop1(x)
 
         x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
+        x = F.relu(self.bn1(self.conv4(x)))
         x = self.pool2(x)
         x = self.drop2(x)
 

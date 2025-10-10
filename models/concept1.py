@@ -12,7 +12,7 @@ from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
 
 from utils.concept1_utils.infer import infer_gen
-from utils.concept1_utils.utils import SyntheticImageFolder
+from utils.concept1_utils.utils import SyntheticImageFolder, init_synthetic_images
 
 #distill hyperparameters
 distill_lr = 0.01
@@ -24,6 +24,7 @@ M = 2
 distill_batch_size = 64
 distill_epochs = 5
 ipc=10
+
 #incremental learning hyperparameters
 batch_size = 128
 num_workers = 4
@@ -37,7 +38,7 @@ lrate = 0.001
 milestones = [60, 80]
 lrate_decay = 0.1
 weight_decay = 2e-4
-num_class = 12
+
 
 class concept1(BaseLearner):
     def __init__(self, args):
@@ -71,7 +72,7 @@ class concept1(BaseLearner):
         )
         syn_dataset = SyntheticImageFolder(
             syn_root="./syn",
-            dataset_name="etc_256",
+            dataset_name="cifar100",
             known_classes=self._known_classes,
             cur_task=self._cur_task,
             transform=transforms.Compose([*data_manager._train_trsf, *data_manager._common_trsf])
@@ -273,20 +274,25 @@ class concept1(BaseLearner):
 
         total_syn_count = 0
         total_aufc_count = 0
-
+        init_inputs = init_synthetic_images(
+            num_class=self._total_classes,
+            dataset=train_dataset,
+            dataset_name='cifar100',
+            init_path='./syn',
+            known_classes=self._known_classes
+        )
         for ipc_id in range(ipc):
             syn, aufc = infer_gen(
                 model_lists = self.model_list, 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 
-                dataset = train_dataset, 
                 iteration = distill_epochs, 
                 lr = distill_lr,  
                 init_path='./syn', 
                 ipc_init=ipc_init, 
-                known_classes=self._known_classes,
+                init_inputs=init_inputs,
                 store_best_images = True,
-                dataset_name='etc_256')
+                dataset_name='cifar100')
             
             # self.synthetic_data.extend(syn)
             # self.ufc.extend(aufc)

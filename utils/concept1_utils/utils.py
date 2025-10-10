@@ -156,6 +156,8 @@ from PIL import Image
 from torchvision import transforms
 import numpy as np
 import os
+import random
+random.seed(42)
 
 class SyntheticImageFolder(Dataset):
     def __init__(self, syn_root="./syn", dataset_name="etc_256", known_classes=0, transform=None, cur_task=0):
@@ -203,3 +205,27 @@ class SyntheticImageFolder(Dataset):
 
         # trả về theo format DataManager expects
         return idx, img, class_id
+    
+def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_classes):
+    init_inputs = {}
+    for class_id in range(num_class):
+        is_old_class = class_id < known_classes
+        if is_old_class:
+            jpg_dir = f"{init_path}/new{class_id:03d}"
+            if os.path.exists(jpg_dir) and len(os.listdir(jpg_dir)) > 0:
+                jpg_file = sorted(os.listdir(jpg_dir))[0]
+                img_path = os.path.join(jpg_dir, jpg_file)
+                img = Image.open(img_path).convert("L" if dataset_name == "etc_256" else "RGB")
+                input_original = transforms.ToTensor()(img).unsqueeze(0).to("cuda")
+                print(f"[OLD] Loaded synthetic init for class {class_id} from {img_path}")
+            else:
+                print(f"[WARN] Missing jpg for class {class_id}, fallback random init")
+                _, img, _ = dataset[random.randint(0, len(dataset) - 1)]
+                input_original = img.unsqueeze(0).to("cuda")
+        else:
+            _, img, _ = dataset[random.randint(0, len(dataset) - 1)]
+            input_original = img.unsqueeze(0).to("cuda")
+            print(f"[NEW] Random init for class {class_id}")
+
+        init_inputs[class_id] = input_original.detach().clone()
+    return init_inputs
